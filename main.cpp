@@ -112,7 +112,7 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
 void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::path path) {
   std::ofstream csv(path);
   csv << std::fixed << std::setprecision(5);
-  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response,duration\n";
+  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response\n" /*,duration\n"*/;
   std::cout << std::fixed << std::setprecision(1);
 
   std::chrono::duration<double> computation_time = std::chrono::duration<double>(0);
@@ -142,8 +142,8 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
         << epsilon << ","
         << current << ","
         << best_attacker.first << ","
-        << best_defender.first << ","
-        << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+        << best_defender.first << "\n";
+        // << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
   }
   std::cout << "\r" << 100.f << "%" << std::flush;
 

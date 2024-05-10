@@ -1,4 +1,5 @@
 *.e
-data/**.attacker
-data/**.defender
-data/**.csv
+# Left uncommented for quick and dirty regression testing.
+# data/**.attacker
+# data/**.defender
+# data/**.csv
