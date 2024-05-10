@@ -1,0 +1,4 @@
+*.e
+data/**.attacker
+data/**.defender
+data/**.csv
