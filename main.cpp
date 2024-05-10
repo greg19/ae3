@@ -10,7 +10,7 @@
 #include <vector>
 
 volatile bool interrupted = false;
-void signal_handler(int signal) { interrupted = true; }
+void signal_handler(int) { interrupted = true; }
 
 int iterations;
 int N, BA, BD;
@@ -115,7 +115,8 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
   csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response,duration\n";
   std::cout << std::fixed << std::setprecision(1);
 
-  std::chrono::duration<double> computation_time, total_time;
+  std::chrono::duration<double> computation_time = std::chrono::duration<double>(0);
+  std::chrono::duration<double> total_time = std::chrono::duration<double>(0);
   auto total_start = std::chrono::high_resolution_clock::now();
   int i;
   int print_step = iterations / 1000 / 10;
