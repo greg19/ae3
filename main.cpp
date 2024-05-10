@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <bit>
+#include <bitset>
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -12,28 +13,28 @@
 volatile bool interrupted = false;
 void signal_handler(int) { interrupted = true; }
 
-int iterations;
-int N, BA, BD;
+const size_t MAX_BATTLEFIELD_NUMBER = 32;
+
+size_t iterations;
+size_t N, BA, BD;
 std::vector<uint32_t> vals;
 
-using strategy = uint16_t;
+using strategy = std::bitset<MAX_BATTLEFIELD_NUMBER>;
 
 struct mixed_strategy {
-  std::unordered_map<strategy, uint64_t> plays;
+  std::unordered_map<u_long, uint64_t> plays;
   uint64_t size;
   void add(strategy s) {
-    plays[s]++;
+    plays[s.to_ulong()]++;
     size++;
   }
 };
 
 double u(strategy sa, strategy sd) {
-  uint16_t won = sa & (~sd);
   double res = 0;
-  for (int i = 0; i < N; i++) {
-    if (won & 1)
+  for (size_t i = 0; i < N; i++) {
+    if (sa[i] && ~sd[i])
       res += vals[i];
-    won >>= 1;
   }
   return res;
 }
@@ -62,17 +63,29 @@ double u(mixed_strategy msa, mixed_strategy msd) {
 
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
   std::pair<double, strategy> res{-1.f, 0};
-  for (strategy sa = 0; sa < (1 << N); sa++)
-    if (std::popcount(sa) == BA)
-      res = std::max(res, std::make_pair(u(sa, msd), sa));
+  for (uint32_t i = 0; i < (1UL << N); i++) {
+    strategy sa{i};
+    if (sa.count() == BA) {
+      auto response_score = u(sa, msd);
+      if (response_score > res.first) {
+        res = std::make_pair(response_score, sa);
+      }
+    }
+  }
   return res;
 }
 
 std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
   std::pair<double, strategy> res{1000000.f, 0};
-  for (strategy sb = 0; sb < (1 << N); sb++)
-    if (std::popcount(sb) == BD)
-      res = std::min(res, std::make_pair(u(msa, sb), sb));
+  for (uint32_t i = 0; i < (1UL << N); i++) {
+    strategy sd{i};
+    if (sd.count() == BD) {
+      auto response_score = u(msa, sd);
+      if (response_score < res.first) {
+        res = std::make_pair(response_score, sd);
+      }
+    }
+  }
   return res;
 }
 
@@ -83,11 +96,13 @@ double what_approx(mixed_strategy msa, mixed_strategy msd) {
   return std::max({0., best_attacker - current, -(best_defender - current)});
 }
 
-mixed_strategy uniform_strategy(int resources) {
+mixed_strategy uniform_strategy(size_t resources) {
   mixed_strategy ms;
-  for (strategy s = 0; s < (1 << N); s++)
-    if (std::popcount(s) == resources)
-      ms.plays[s] = 1;
+  for (uint32_t i = 0; i < (1UL << N); i++) {
+    strategy s{i};
+    if (s.count() == resources)
+      ms.plays[s.to_ulong()] = 1;
+  }
   ms.size = ms.plays.size();
   return ms;
 }
@@ -103,8 +118,8 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
   csv << std::fixed << std::setprecision(10);
   csv << "strategy,probability\n";
   for (const auto &[s, p] : x) {
-    for (int i = 0; i < N; i++)
-      csv << ((s >> i) & 1);
+    for (size_t i = 0; i < N; i++)
+      csv << s[i];
     csv << "," << p << "\n";
   }
 }
@@ -118,8 +133,8 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
   std::chrono::duration<double> computation_time = std::chrono::duration<double>(0);
   std::chrono::duration<double> total_time = std::chrono::duration<double>(0);
   auto total_start = std::chrono::high_resolution_clock::now();
-  int i;
-  int print_step = std::max(iterations / 1000 / 10, 1);
+  size_t i;
+  size_t print_step = std::max(iterations / 1000 / 10, 1UL);
   for (i = 0; i < iterations && !interrupted; i++) {
     if (i / print_step != (i-1) / print_step)
       std::cout << "\r" << 100.f * i / iterations << "%" << std::flush;
@@ -176,7 +191,7 @@ void read_input(std::istream& is) {
   is >> BA >> BD;
   is >> N;
   vals.resize(N);
-  for (int i = 0; i < N; i++)
+  for (size_t i = 0; i < N; i++)
     is >> vals[i];
 }
 
@@ -199,7 +214,7 @@ int main(int argc, char* argv[]) {
       << "BA = " << BA
       << ", BD = " << BD
       << ", battlefield = ";
-    for (int i = 0; i < N; i++)
+    for (size_t i = 0; i < N; i++)
       std::cout << +vals[i] << " ";
     std::cout << "\n";
 
