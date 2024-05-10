@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <bit>
 #include <bitset>
+#include <compare>
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -19,21 +20,38 @@ size_t iterations;
 size_t N, BA, BD;
 std::vector<uint32_t> vals;
 
-using strategy = std::bitset<MAX_BATTLEFIELD_NUMBER>;
+struct strategy {
+  std::bitset<MAX_BATTLEFIELD_NUMBER> play;
+
+  strategy() {}
+  strategy(u_long i): play(i) {}
+
+  bool operator==(const strategy&) const = default;
+};
+
+template<>
+struct std::hash<strategy> {
+  std::size_t operator()(const strategy &s) const noexcept {
+    return std::hash<uint32_t>{}(s.play.to_ulong());
+  }
+};
+
 
 struct mixed_strategy {
-  std::unordered_map<u_long, uint64_t> plays;
+  std::unordered_map<strategy, uint64_t> plays;
   uint64_t size;
   void add(strategy s) {
-    plays[s.to_ulong()]++;
+    plays[s]++;
     size++;
   }
+
+  mixed_strategy(): plays{} {}
 };
 
 double u(strategy sa, strategy sd) {
   double res = 0;
   for (size_t i = 0; i < N; i++) {
-    if (sa[i] && ~sd[i])
+    if (sa.play[i] && ~sd.play[i])
       res += vals[i];
   }
   return res;
@@ -62,24 +80,26 @@ double u(mixed_strategy msa, mixed_strategy msd) {
 }
 
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
-  std::pair<double, strategy> res{-1.f, 0};
+  double res_score = -1.f;
+  strategy res_strategy{};
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy sa{i};
-    if (sa.count() == BA) {
+    if (sa.play.count() == BA) {
       auto response_score = u(sa, msd);
-      if (response_score > res.first) {
-        res = std::make_pair(response_score, sa);
+      if (response_score > res_score) {
+        res_score = response_score;
+        res_strategy = sa;
       }
     }
   }
-  return res;
+  return std::make_pair(res_score, res_strategy);
 }
 
 std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
   std::pair<double, strategy> res{1000000.f, 0};
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy sd{i};
-    if (sd.count() == BD) {
+    if (sd.play.count() == BD) {
       auto response_score = u(msa, sd);
       if (response_score < res.first) {
         res = std::make_pair(response_score, sd);
@@ -100,8 +120,8 @@ mixed_strategy uniform_strategy(size_t resources) {
   mixed_strategy ms;
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy s{i};
-    if (s.count() == resources)
-      ms.plays[s.to_ulong()] = 1;
+    if (s.play.count() == resources)
+      ms.plays[s] = 1;
   }
   ms.size = ms.plays.size();
   return ms;
@@ -119,7 +139,7 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
   csv << "strategy,probability\n";
   for (const auto &[s, p] : x) {
     for (size_t i = 0; i < N; i++)
-      csv << s[i];
+      csv << s.play[i];
     csv << "," << p << "\n";
   }
 }
