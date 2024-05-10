@@ -119,7 +119,7 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
   std::chrono::duration<double> total_time = std::chrono::duration<double>(0);
   auto total_start = std::chrono::high_resolution_clock::now();
   int i;
-  int print_step = iterations / 1000 / 10;
+  int print_step = std::max(iterations / 1000 / 10, 1);
   for (i = 0; i < iterations && !interrupted; i++) {
     if (i / print_step != (i-1) / print_step)
       std::cout << "\r" << 100.f * i / iterations << "%" << std::flush;
