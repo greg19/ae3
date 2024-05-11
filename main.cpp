@@ -80,7 +80,20 @@ double u(mixed_strategy msa, mixed_strategy msd) {
   return res / msa.size / msd.size;
 }
 
+std::vector<double> battlefield_set_probabilities(mixed_strategy s) {
+  std::vector<double> set_probabilities(N);
+  for (size_t i = 0; i < N; i++) {
+    auto set_size = 0;
+    for (const auto &simple_strategy: s.plays) {
+      if (simple_strategy.first.play[i]) set_size += simple_strategy.second;
+    }
+    set_probabilities[i] = static_cast<double>(set_size) / static_cast<double>(s.size);
+  }
+  return set_probabilities;
+}
+
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
+  std::vector<double> defended_probabilities = battlefield_set_probabilities(msd);
   std::vector<std::pair<double, size_t>> expected_score_attacked(N);
   for (size_t i = 0; i < N; i++) {
     expected_score_attacked[i].second = i;
@@ -88,14 +101,9 @@ std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
 
   for (size_t i = 0; i < N; i++) {
     auto battlefield_value = vals[i];
-    auto defending_size = 0;
-    for (const auto &simple_strategy: msd.plays) {
-      if (simple_strategy.first.play[i]) defending_size += simple_strategy.second;
-    }
-    auto not_defending_size = msd.size - defending_size;
+    auto not_defended_prob = 1 - defended_probabilities[i];
     expected_score_attacked[i].first =
-      static_cast<double>(battlefield_value) * static_cast<double>(not_defending_size) /
-      static_cast<double>(msd.size);
+      static_cast<double>(battlefield_value) * static_cast<double>(not_defended_prob);
   }
 
   sort(expected_score_attacked.begin(), expected_score_attacked.end(), std::greater());
