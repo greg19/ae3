@@ -46,7 +46,7 @@ struct mixed_strategy {
     size++;
   }
 
-  mixed_strategy(): plays{} {}
+  mixed_strategy(): plays{}, size{0} {}
 };
 
 double u(strategy sa, strategy sd) {
@@ -171,6 +171,17 @@ mixed_strategy uniform_strategy(size_t resources) {
   return ms;
 }
 
+mixed_strategy prefix_strategy(size_t resources) {
+  strategy strat;
+  for (size_t i = 0; i < resources; i++) {
+    strat.play[i] = true;
+  }
+
+  mixed_strategy mixed_strat;
+  mixed_strat.add(strat);
+  return mixed_strat;
+}
+
 void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
   std::ofstream csv(path);
   std::vector<std::pair<strategy, double>> x;
@@ -282,8 +293,8 @@ int main(int argc, char* argv[]) {
       std::cout << +vals[i] << " ";
     std::cout << "\n";
 
-    mixed_strategy msa = uniform_strategy(BA);
-    mixed_strategy msd = uniform_strategy(BD);
+    mixed_strategy msa = prefix_strategy(BA);
+    mixed_strategy msd = prefix_strategy(BD);
 
     path.replace_extension("csv");
     fictitious_play(msa, msd, path);
