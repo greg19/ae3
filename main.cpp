@@ -92,6 +92,16 @@ std::vector<double> battlefield_set_probabilities(mixed_strategy s) {
   return set_probabilities;
 }
 
+strategy strategy_from_battlefield_ranking(size_t size, const std::vector<size_t> &ranking_from_best) {
+  assert(size <= ranking_from_best.size());
+
+  strategy strat;
+  for (size_t i = 0; i < size; i++) {
+    strat.play[ranking_from_best[i]] = true;
+  }
+  return strat;
+}
+
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
   std::vector<double> defended_probabilities = battlefield_set_probabilities(msd);
   std::vector<std::pair<double, size_t>> expected_score_attacked(N);
@@ -108,12 +118,13 @@ std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
 
   sort(expected_score_attacked.begin(), expected_score_attacked.end(), std::greater());
 
-  double expected_score = 0;
-  strategy response{};
-  for (size_t i = 0; i < BA; i++) {
-    response.play[expected_score_attacked[i].second] = true;
-    expected_score += expected_score_attacked[i].first;
+  std::vector<size_t> battlefields_from_best(N);
+  for (size_t i = 0; i < N; i++) {
+    battlefields_from_best[i] = expected_score_attacked[i].second;
   }
+
+  strategy response = strategy_from_battlefield_ranking(BA, battlefields_from_best);
+  double expected_score = u(response, msd);
   return std::make_pair(expected_score, response);
 }
 
@@ -132,15 +143,14 @@ std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
 
   sort(expected_score_not_defended.begin(), expected_score_not_defended.end(), std::less());
 
-  double expected_score = 0;
-  strategy response{};
-  for (size_t i = 0; i < BD; i++) {
-    response.play[expected_score_not_defended[i].second] = true;
+  std::vector<size_t> battlefields_from_best(N);
+  for (size_t i = 0; i < N; i++) {
+    battlefields_from_best[i] = expected_score_not_defended[i].second;
   }
-  for (size_t i = BD; i < N; i++) {
-    expected_score += expected_score_not_defended[i].first;
-  }
-  return std::make_pair(-expected_score, response);
+
+  strategy response = strategy_from_battlefield_ranking(BD, battlefields_from_best);
+  double expected_score = u(msa, response);
+  return std::make_pair(expected_score, response);
 }
 
 double what_approx(mixed_strategy msa, mixed_strategy msd) {
