@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <bit>
 #include <bitset>
+#include <cassert>
 #include <compare>
 #include <csignal>
 #include <cstdint>
@@ -80,19 +81,32 @@ double u(mixed_strategy msa, mixed_strategy msd) {
 }
 
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
-  double res_score = -1.f;
-  strategy res_strategy{};
-  for (uint32_t i = 0; i < (1UL << N); i++) {
-    strategy sa{i};
-    if (sa.play.count() == BA) {
-      auto response_score = u(sa, msd);
-      if (response_score > res_score) {
-        res_score = response_score;
-        res_strategy = sa;
-      }
-    }
+  std::vector<std::pair<double, size_t>> expected_score_attacked(N);
+  for (size_t i = 0; i < N; i++) {
+    expected_score_attacked[i].second = i;
   }
-  return std::make_pair(res_score, res_strategy);
+
+  for (size_t i = 0; i < N; i++) {
+    auto battlefield_value = vals[i];
+    auto defending_size = 0;
+    for (const auto &simple_strategy: msd.plays) {
+      if (simple_strategy.first.play[i]) defending_size += simple_strategy.second;
+    }
+    auto not_defending_size = msd.size - defending_size;
+    expected_score_attacked[i].first =
+      static_cast<double>(battlefield_value) * static_cast<double>(not_defending_size) /
+      static_cast<double>(msd.size);
+  }
+
+  sort(expected_score_attacked.begin(), expected_score_attacked.end(), std::greater());
+
+  double expected_score = 0;
+  strategy response{};
+  for (size_t i = 0; i < BA; i++) {
+    response.play[expected_score_attacked[i].second] = true;
+    expected_score += expected_score_attacked[i].first;
+  }
+  return std::make_pair(expected_score, response);
 }
 
 std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
