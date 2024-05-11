@@ -118,17 +118,29 @@ std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
 }
 
 std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
-  std::pair<double, strategy> res{1000000.f, 0};
-  for (uint32_t i = 0; i < (1UL << N); i++) {
-    strategy sd{i};
-    if (sd.play.count() == BD) {
-      auto response_score = u(msa, sd);
-      if (response_score < res.first) {
-        res = std::make_pair(response_score, sd);
-      }
-    }
+  std::vector<double> attacked_probabilities = battlefield_set_probabilities(msa);
+  std::vector<std::pair<double, size_t>> expected_score_not_defended(N);
+  for (size_t i = 0; i < N; i++) {
+    expected_score_not_defended[i].second = i;
   }
-  return res;
+
+  for (size_t i = 0; i < N; i++) {
+    auto battlefield_value = vals[i];
+    expected_score_not_defended[i].first =
+      - static_cast<double>(battlefield_value) * static_cast<double>(attacked_probabilities[i]);
+  }
+
+  sort(expected_score_not_defended.begin(), expected_score_not_defended.end(), std::less());
+
+  double expected_score = 0;
+  strategy response{};
+  for (size_t i = 0; i < BD; i++) {
+    response.play[expected_score_not_defended[i].second] = true;
+  }
+  for (size_t i = BD; i < N; i++) {
+    expected_score += expected_score_not_defended[i].first;
+  }
+  return std::make_pair(-expected_score, response);
 }
 
 double what_approx(mixed_strategy msa, mixed_strategy msd) {
