@@ -1,5 +1,8 @@
 #include <algorithm>
 #include <bit>
+#include <bitset>
+#include <cassert>
+#include <compare>
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -10,13 +13,30 @@
 #include <vector>
 
 volatile bool interrupted = false;
-void signal_handler(int signal) { interrupted = true; }
+void signal_handler(int) { interrupted = true; }
 
-int iterations;
-int N, BA, BD;
+const size_t MAX_BATTLEFIELD_NUMBER = 32;
+
+size_t iterations;
+size_t N, BA, BD;
 std::vector<uint32_t> vals;
 
-using strategy = uint16_t;
+struct strategy {
+  std::bitset<MAX_BATTLEFIELD_NUMBER> play;
+
+  strategy() {}
+  strategy(u_long i): play(i) {}
+
+  bool operator==(const strategy&) const = default;
+};
+
+template<>
+struct std::hash<strategy> {
+  std::size_t operator()(const strategy &s) const noexcept {
+    return std::hash<uint32_t>{}(s.play.to_ulong());
+  }
+};
+
 
 struct mixed_strategy {
   std::unordered_map<strategy, uint64_t> plays;
@@ -25,15 +45,15 @@ struct mixed_strategy {
     plays[s]++;
     size++;
   }
+
+  mixed_strategy(): plays{}, size{0} {}
 };
 
 double u(strategy sa, strategy sd) {
-  uint16_t won = sa & (~sd);
   double res = 0;
-  for (int i = 0; i < N; i++) {
-    if (won & 1)
+  for (size_t i = 0; i < N; i++) {
+    if (sa.play[i] && ~sd.play[i])
       res += vals[i];
-    won >>= 1;
   }
   return res;
 }
@@ -60,20 +80,77 @@ double u(mixed_strategy msa, mixed_strategy msd) {
   return res / msa.size / msd.size;
 }
 
+std::vector<double> battlefield_set_probabilities(mixed_strategy s) {
+  std::vector<double> set_probabilities(N);
+  for (size_t i = 0; i < N; i++) {
+    auto set_size = 0;
+    for (const auto &simple_strategy: s.plays) {
+      if (simple_strategy.first.play[i]) set_size += simple_strategy.second;
+    }
+    set_probabilities[i] = static_cast<double>(set_size) / static_cast<double>(s.size);
+  }
+  return set_probabilities;
+}
+
+strategy strategy_from_battlefield_ranking(size_t size, const std::vector<size_t> &ranking_from_best) {
+  assert(size <= ranking_from_best.size());
+
+  strategy strat;
+  for (size_t i = 0; i < size; i++) {
+    strat.play[ranking_from_best[i]] = true;
+  }
+  return strat;
+}
+
 std::pair<double, strategy> best_response_attacker(mixed_strategy msd) {
-  std::pair<double, strategy> res{-1.f, 0};
-  for (strategy sa = 0; sa < (1 << N); sa++)
-    if (std::popcount(sa) == BA)
-      res = std::max(res, std::make_pair(u(sa, msd), sa));
-  return res;
+  std::vector<double> defended_probabilities = battlefield_set_probabilities(msd);
+  std::vector<std::pair<double, size_t>> expected_score_attacked(N);
+  for (size_t i = 0; i < N; i++) {
+    expected_score_attacked[i].second = i;
+  }
+
+  for (size_t i = 0; i < N; i++) {
+    auto battlefield_value = vals[i];
+    auto not_defended_prob = 1 - defended_probabilities[i];
+    expected_score_attacked[i].first =
+      static_cast<double>(battlefield_value) * static_cast<double>(not_defended_prob);
+  }
+
+  sort(expected_score_attacked.begin(), expected_score_attacked.end(), std::greater());
+
+  std::vector<size_t> battlefields_from_best(N);
+  for (size_t i = 0; i < N; i++) {
+    battlefields_from_best[i] = expected_score_attacked[i].second;
+  }
+
+  strategy response = strategy_from_battlefield_ranking(BA, battlefields_from_best);
+  double expected_score = u(response, msd);
+  return std::make_pair(expected_score, response);
 }
 
 std::pair<double, strategy> best_response_defender(mixed_strategy msa) {
-  std::pair<double, strategy> res{1000000.f, 0};
-  for (strategy sb = 0; sb < (1 << N); sb++)
-    if (std::popcount(sb) == BD)
-      res = std::min(res, std::make_pair(u(msa, sb), sb));
-  return res;
+  std::vector<double> attacked_probabilities = battlefield_set_probabilities(msa);
+  std::vector<std::pair<double, size_t>> expected_score_not_defended(N);
+  for (size_t i = 0; i < N; i++) {
+    expected_score_not_defended[i].second = i;
+  }
+
+  for (size_t i = 0; i < N; i++) {
+    auto battlefield_value = vals[i];
+    expected_score_not_defended[i].first =
+      - static_cast<double>(battlefield_value) * static_cast<double>(attacked_probabilities[i]);
+  }
+
+  sort(expected_score_not_defended.begin(), expected_score_not_defended.end(), std::less());
+
+  std::vector<size_t> battlefields_from_best(N);
+  for (size_t i = 0; i < N; i++) {
+    battlefields_from_best[i] = expected_score_not_defended[i].second;
+  }
+
+  strategy response = strategy_from_battlefield_ranking(BD, battlefields_from_best);
+  double expected_score = u(msa, response);
+  return std::make_pair(expected_score, response);
 }
 
 double what_approx(mixed_strategy msa, mixed_strategy msd) {
@@ -83,13 +160,26 @@ double what_approx(mixed_strategy msa, mixed_strategy msd) {
   return std::max({0., best_attacker - current, -(best_defender - current)});
 }
 
-mixed_strategy uniform_strategy(int resources) {
+mixed_strategy uniform_strategy(size_t resources) {
   mixed_strategy ms;
-  for (strategy s = 0; s < (1 << N); s++)
-    if (std::popcount(s) == resources)
+  for (uint32_t i = 0; i < (1UL << N); i++) {
+    strategy s{i};
+    if (s.play.count() == resources)
       ms.plays[s] = 1;
+  }
   ms.size = ms.plays.size();
   return ms;
+}
+
+mixed_strategy prefix_strategy(size_t resources) {
+  strategy strat;
+  for (size_t i = 0; i < resources; i++) {
+    strat.play[i] = true;
+  }
+
+  mixed_strategy mixed_strat;
+  mixed_strat.add(strat);
+  return mixed_strat;
 }
 
 void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
@@ -103,8 +193,8 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
   csv << std::fixed << std::setprecision(10);
   csv << "strategy,probability\n";
   for (const auto &[s, p] : x) {
-    for (int i = 0; i < N; i++)
-      csv << ((s >> i) & 1);
+    for (size_t i = 0; i < N; i++)
+      csv << s.play[i];
     csv << "," << p << "\n";
   }
 }
@@ -112,13 +202,14 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
 void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::path path) {
   std::ofstream csv(path);
   csv << std::fixed << std::setprecision(5);
-  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response,duration\n";
+  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response\n" /*,duration\n"*/;
   std::cout << std::fixed << std::setprecision(1);
 
-  std::chrono::duration<double> computation_time, total_time;
+  std::chrono::duration<double> computation_time = std::chrono::duration<double>(0);
+  std::chrono::duration<double> total_time = std::chrono::duration<double>(0);
   auto total_start = std::chrono::high_resolution_clock::now();
-  int i;
-  int print_step = iterations / 1000 / 10;
+  size_t i;
+  size_t print_step = std::max(iterations / 1000 / 10, 1UL);
   for (i = 0; i < iterations && !interrupted; i++) {
     if (i / print_step != (i-1) / print_step)
       std::cout << "\r" << 100.f * i / iterations << "%" << std::flush;
@@ -141,8 +232,8 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
         << epsilon << ","
         << current << ","
         << best_attacker.first << ","
-        << best_defender.first << ","
-        << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+        << best_defender.first << "\n";
+        // << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
   }
   std::cout << "\r" << 100.f << "%" << std::flush;
 
@@ -175,7 +266,7 @@ void read_input(std::istream& is) {
   is >> BA >> BD;
   is >> N;
   vals.resize(N);
-  for (int i = 0; i < N; i++)
+  for (size_t i = 0; i < N; i++)
     is >> vals[i];
 }
 
@@ -198,12 +289,12 @@ int main(int argc, char* argv[]) {
       << "BA = " << BA
       << ", BD = " << BD
       << ", battlefield = ";
-    for (int i = 0; i < N; i++)
+    for (size_t i = 0; i < N; i++)
       std::cout << +vals[i] << " ";
     std::cout << "\n";
 
-    mixed_strategy msa = uniform_strategy(BA);
-    mixed_strategy msd = uniform_strategy(BD);
+    mixed_strategy msa = prefix_strategy(BA);
+    mixed_strategy msd = prefix_strategy(BD);
 
     path.replace_extension("csv");
     fictitious_play(msa, msd, path);
