@@ -1,8 +1,6 @@
 #include <algorithm>
-#include <bit>
 #include <bitset>
 #include <cassert>
-#include <compare>
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -21,19 +19,12 @@ size_t iterations;
 size_t N, BA, BD;
 std::vector<uint32_t> vals;
 
-struct strategy {
-  std::bitset<MAX_BATTLEFIELD_NUMBER> play;
-
-  strategy() {}
-  strategy(u_long i): play(i) {}
-
-  bool operator==(const strategy&) const = default;
-};
+using strategy = std::bitset<MAX_BATTLEFIELD_NUMBER>;
 
 template<>
 struct std::hash<strategy> {
   std::size_t operator()(const strategy &s) const noexcept {
-    return std::hash<uint32_t>{}(s.play.to_ulong());
+    return std::hash<uint32_t>{}(s.to_ulong());
   }
 };
 
@@ -52,7 +43,7 @@ struct mixed_strategy {
 double u(strategy sa, strategy sd) {
   double res = 0;
   for (size_t i = 0; i < N; i++) {
-    if (sa.play[i] && ~sd.play[i])
+    if (sa[i] && ~sd[i])
       res += vals[i];
   }
   return res;
@@ -85,7 +76,7 @@ std::vector<double> battlefield_set_probabilities(mixed_strategy s) {
   for (size_t i = 0; i < N; i++) {
     auto set_size = 0;
     for (const auto &simple_strategy: s.plays) {
-      if (simple_strategy.first.play[i]) set_size += simple_strategy.second;
+      if (simple_strategy.first[i]) set_size += simple_strategy.second;
     }
     set_probabilities[i] = static_cast<double>(set_size) / static_cast<double>(s.size);
   }
@@ -97,7 +88,7 @@ strategy strategy_from_battlefield_ranking(size_t size, const std::vector<size_t
 
   strategy strat;
   for (size_t i = 0; i < size; i++) {
-    strat.play[ranking_from_best[i]] = true;
+    strat[ranking_from_best[i]] = true;
   }
   return strat;
 }
@@ -164,7 +155,7 @@ mixed_strategy uniform_strategy(size_t resources) {
   mixed_strategy ms;
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy s{i};
-    if (s.play.count() == resources)
+    if (s.count() == resources)
       ms.plays[s] = 1;
   }
   ms.size = ms.plays.size();
@@ -174,7 +165,7 @@ mixed_strategy uniform_strategy(size_t resources) {
 mixed_strategy prefix_strategy(size_t resources) {
   strategy strat;
   for (size_t i = 0; i < resources; i++) {
-    strat.play[i] = true;
+    strat[i] = true;
   }
 
   mixed_strategy mixed_strat;
@@ -194,7 +185,7 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
   csv << "strategy,probability\n";
   for (const auto &[s, p] : x) {
     for (size_t i = 0; i < N; i++)
-      csv << s.play[i];
+      csv << s[i];
     csv << "," << p << "\n";
   }
 }
@@ -260,7 +251,11 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
   csv.close();
 }
 
-void read_input(std::istream& is) {
+std::pair<mixed_strategy, mixed_strategy> read_input(std::istream& is) {
+  int sa_size, sd_size;
+  mixed_strategy msa, msd;
+  std::string x;
+
   vals.clear();
   is >> iterations;
   is >> BA >> BD;
@@ -268,6 +263,26 @@ void read_input(std::istream& is) {
   vals.resize(N);
   for (size_t i = 0; i < N; i++)
     is >> vals[i];
+
+  is >> sa_size;
+  if (sa_size == 0) msa = uniform_strategy(BA);
+  for (int i = 0; i < sa_size; i++) {
+    is >> x;
+    std::reverse(x.begin(), x.end());
+    assert(strategy(x).count() == BA);
+    msa.add(strategy(x));
+  }
+
+  is >> sd_size;
+  if (sd_size == 0) msa = uniform_strategy(BD);
+  for (int i = 0; i < sd_size; i++) {
+    is >> x;
+    std::reverse(x.begin(), x.end());
+    assert(strategy(x).count() == BD);
+    msd.add(strategy(x));
+  }
+
+  return {msa, msd};
 }
 
 int main(int argc, char* argv[]) {
@@ -282,7 +297,7 @@ int main(int argc, char* argv[]) {
     std::filesystem::path path(argv[i]);
 
     std::ifstream config_file(path);
-    read_input(config_file);
+    auto [msa, msd] = read_input(config_file);
     config_file.close();
 
     std::cout << path << " ... "
@@ -292,9 +307,6 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < N; i++)
       std::cout << +vals[i] << " ";
     std::cout << "\n";
-
-    mixed_strategy msa = prefix_strategy(BA);
-    mixed_strategy msd = prefix_strategy(BD);
 
     path.replace_extension("csv");
     fictitious_play(msa, msd, path);
