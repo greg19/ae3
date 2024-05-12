@@ -1,5 +1,5 @@
 *.e
-# Left uncommented for quick and dirty regression testing.
-# data/**.attacker
-# data/**.defender
-# data/**.csv
+data/analytics/**/*.attacker
+data/analytics/**/*.defender
+data/analytics/**/*.csv
+data/analytics/sized/*

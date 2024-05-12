@@ -15,6 +15,8 @@ void signal_handler(int) { interrupted = true; }
 
 const size_t MAX_BATTLEFIELD_NUMBER = 32;
 
+bool time_logging = false;
+
 size_t iterations;
 size_t N, BA, BD;
 std::vector<uint32_t> vals;
@@ -193,7 +195,9 @@ void print_strategy(const mixed_strategy &ms, std::filesystem::path path) {
 void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::path path) {
   std::ofstream csv(path);
   csv << std::fixed << std::setprecision(5);
-  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response\n" /*,duration\n"*/;
+  csv << "iteration,epsilon,payoff,attacker_best_response,defender_best_response";
+  if (time_logging) csv << ",duration\n";
+  else csv << "\n";
   std::cout << std::fixed << std::setprecision(1);
 
   std::chrono::duration<double> computation_time = std::chrono::duration<double>(0);
@@ -223,8 +227,9 @@ void fictitious_play(mixed_strategy& msa, mixed_strategy& msd, std::filesystem::
         << epsilon << ","
         << current << ","
         << best_attacker.first << ","
-        << best_defender.first << "\n";
-        // << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+        << best_defender.first;
+    if (time_logging) csv << "," << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+    else csv << "\n";
   }
   std::cout << "\r" << 100.f << "%" << std::flush;
 
@@ -285,15 +290,34 @@ std::pair<mixed_strategy, mixed_strategy> read_input(std::istream& is) {
   return {msa, msd};
 }
 
-int main(int argc, char* argv[]) {
-  if (argc <= 1) {
-    std::cerr << "usage: " << argv[0] << " <config1> [config2] [config3] ..." << std::endl;
-    return 1;
-  }
+void show_usage_guide(char* prog_name) {
+  std::cerr << "usage: " << prog_name << " [-t|--time] <config1> [config2] [config3] ..." << std::endl;
+  exit(1);
+}
 
+int main(int argc, char* argv[]) {
   std::signal(SIGINT, signal_handler);
 
-  for (int i = 1; i < argc; i++) {
+  auto prog_name = argv[0];
+  int file_paths_start = 1;
+
+  while (file_paths_start < argc) {
+    std::string arg{argv[file_paths_start]};
+    if (arg.starts_with("-")) {
+      file_paths_start++;
+
+      if (arg == "-t" || arg == "--time") {
+        time_logging = true;
+      } else {
+        show_usage_guide(prog_name);
+      }
+    } else break;
+  }
+
+  if (file_paths_start >= argc) show_usage_guide(prog_name);
+
+
+  for (int i = file_paths_start; i < argc; i++) {
     std::filesystem::path path(argv[i]);
 
     std::ifstream config_file(path);
