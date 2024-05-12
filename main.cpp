@@ -13,7 +13,7 @@
 volatile bool interrupted = false;
 void signal_handler(int) { interrupted = true; }
 
-const size_t MAX_BATTLEFIELD_NUMBER = 32;
+const size_t MAX_BATTLEFIELD_NUMBER = 128;
 
 bool time_logging = false;
 
@@ -26,7 +26,7 @@ using strategy = std::bitset<MAX_BATTLEFIELD_NUMBER>;
 template<>
 struct std::hash<strategy> {
   std::size_t operator()(const strategy &s) const noexcept {
-    return std::hash<uint32_t>{}(s.to_ulong());
+    return std::hash<std::string>{}(s.to_string());
   }
 };
 
@@ -154,6 +154,7 @@ double what_approx(mixed_strategy msa, mixed_strategy msd) {
 }
 
 mixed_strategy uniform_strategy(size_t resources) {
+  assert(resources < sizeof(uint32_t));
   mixed_strategy ms;
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy s{i};
