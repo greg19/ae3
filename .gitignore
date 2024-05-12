@@ -2,4 +2,6 @@
 data/analytics/**/*.attacker
 data/analytics/**/*.defender
 data/analytics/**/*.csv
+data/analytics/**/*.png
 data/analytics/sized/*
+data/results/**/*
