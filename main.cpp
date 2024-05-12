@@ -154,7 +154,6 @@ double what_approx(mixed_strategy msa, mixed_strategy msd) {
 }
 
 mixed_strategy uniform_strategy(size_t resources) {
-  assert(resources < sizeof(uint32_t));
   mixed_strategy ms;
   for (uint32_t i = 0; i < (1UL << N); i++) {
     strategy s{i};
@@ -280,7 +279,7 @@ std::pair<mixed_strategy, mixed_strategy> read_input(std::istream& is) {
   }
 
   is >> sd_size;
-  if (sd_size == 0) msa = uniform_strategy(BD);
+  if (sd_size == 0) msd = uniform_strategy(BD);
   for (int i = 0; i < sd_size; i++) {
     is >> x;
     std::reverse(x.begin(), x.end());
